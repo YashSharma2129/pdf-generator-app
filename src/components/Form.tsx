@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -17,16 +17,30 @@ const formSchema = z.object({
 
 type FormData = z.infer<typeof formSchema>;
 
+interface DummyUser {
+  id: number;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  company?: {
+    title?: string;
+  };
+}
+
 interface FormProps {
   onNavigateToPreview: (data: UserDetails) => void;
 }
 
 export default function Form({ onNavigateToPreview }: FormProps) {
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
-
+  const [users, setUsers] = useState<DummyUser[]>([]);
+  const [isLoadingUsers, setIsLoadingUsers] = useState(false);
+  
   const {
     register,
     handleSubmit,
+    setValue,
     formState: { errors },
   } = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -34,43 +48,72 @@ export default function Form({ onNavigateToPreview }: FormProps) {
 
   const generatePDF = (data: FormData) => {
     const doc = new jsPDF();
-    
+
     doc.setFont('helvetica');
-    
+
     doc.setFontSize(20);
     doc.text('Personal Details', 20, 30);
-    
+
     doc.setFontSize(12);
     let yPosition = 60;
-    
+
     doc.text(`Name: ${data.name}`, 20, yPosition);
     yPosition += 15;
-    
+
     doc.text(`Email: ${data.email}`, 20, yPosition);
     yPosition += 15;
-    
+
     doc.text(`Phone: ${data.phone}`, 20, yPosition);
     yPosition += 15;
-    
+
     if (data.position) {
       doc.text(`Position: ${data.position}`, 20, yPosition);
       yPosition += 15;
     }
-    
+
     if (data.description) {
       doc.text(`Description:`, 20, yPosition);
       yPosition += 10;
-        
+
       const splitDescription = doc.splitTextToSize(data.description, 170);
       doc.text(splitDescription, 20, yPosition);
     }
-    
+
     return doc;
   };
 
   const handleViewPDF = (data: FormData) => {
     onNavigateToPreview(data);
   };
+
+  const fetchUsers = async () => {
+    setIsLoadingUsers(true);
+    try {
+      const res = await fetch("https://dummyjson.com/users");
+      const data = await res.json();
+      setUsers(data.users || []);
+    } catch (error) {
+      console.error('Error fetching users:', error);
+    } finally {
+      setIsLoadingUsers(false);
+    }
+  };
+
+  const handleRandomUser = () => {
+    if (users.length === 0) {
+      fetchUsers();
+      return;
+    }
+    
+    const randomUser = users[Math.floor(Math.random() * users.length)];
+    const fullName = `${randomUser.firstName} ${randomUser.lastName}`;
+    
+    setValue('name', fullName);
+    setValue('email', randomUser.email);
+    setValue('phone', randomUser.phone);
+    setValue('position', randomUser.company?.title || '');
+  };
+
 
   const handleDownloadPDF = async (data: FormData) => {
     setIsGeneratingPDF(true);
@@ -93,7 +136,7 @@ export default function Form({ onNavigateToPreview }: FormProps) {
         <h1 className="text-2xl font-bold text-center mb-8 text-black">
           Add Your details
         </h1>
-        
+
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
           <div className="relative">
             <div className="flex items-center space-x-3 p-4 border border-gray-300 rounded-lg bg-white">
@@ -194,6 +237,17 @@ export default function Form({ onNavigateToPreview }: FormProps) {
                 <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
               </svg>
               <span>{isGeneratingPDF ? 'Generating...' : 'Download PDF'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleRandomUser}
+              disabled={isLoadingUsers}
+              className="flex-1 bg-gradient-to-r from-blue-500 to-blue-600 text-white py-3 px-6 rounded-lg font-medium hover:from-blue-600 hover:to-blue-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+            >
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 01-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
+              </svg>
+              <span>{isLoadingUsers ? 'Loading...' : 'Random User'}</span>
             </button>
           </div>
         </form>
